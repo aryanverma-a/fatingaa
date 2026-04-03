@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Travel Planner</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&family=JetBrains+Mono:wght@400&display=swap"
+        rel="stylesheet">
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+    <!-- Flatpickr CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="./style.css">
+</head>
+
+<body class="light-mode">
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <button id="popularToggle" class="icon-btn" aria-label="Toggle Popular Cities" title="Popular Cities"><i
+                        class="fa-solid fa-bars"></i></button>
+                <span>Smart Travel Planner</span>
+            </div>
+            <div class="nav-search">
+                <div class="search-wrapper">
+                    <input type="text" id="citySearch" placeholder="Search any city (e.g. Tokyo)..." autocomplete="off"
+                        aria-label="Search city">
+                    <button id="searchBtn" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
+                    <!-- Autocomplete Dropdown -->
+                    <ul id="searchSuggestions" class="suggestions-list" style="display: none;"></ul>
+                </div>
+            </div>
+            <div class="nav-actions">
+                <button id="unitToggle" class="icon-btn" aria-label="Toggle Temperature Units"
+                    title="Toggle °C/°F">°C/°F</button>
+                <button id="themeToggle" class="icon-btn" aria-label="Toggle Dark Mode" title="Toggle Theme"><i
+                        class="fa-solid fa-moon"></i></button>
+                <button id="historyToggle" class="icon-btn" aria-label="Open Trip History" title="View History"><i
+                        class="fa-solid fa-clock-rotate-left"></i></button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <!-- Hero Weather Section -->
+        <section class="hero-section" id="heroSection">
+            <div class="hero-background" id="heroBackground"></div>
+            <div class="hero-overlay"></div>
+            <div class="weather-card glass-panel" id="mainWeatherCard">
+                <div class="weather-header">
+                    <h1 id="cityName">Enter a city to start planning</h1>
+                    <p id="currentDate">Discover weather-optimized activities</p>
+                </div>
+
+                <div class="weather-body" id="weatherBody" style="display: none;">
+                    <div class="weather-main">
+                        <i id="weatherIcon" class="fa-solid fa-cloud weather-icon-large pulse-anim"></i>
+                        <div class="temp-group">
+                            <span class="temperature" id="currentTemp">--</span>
+                            <span class="unit-label temp-unit">°C</span>
+                        </div>
+                    </div>
+                    <p class="condition" id="weatherCondition">--</p>
+                    <div class="weather-chips">
+                        <div class="chip"><i class="fa-solid fa-temperature-half"></i> Feels like: <span
+                                id="feelsLike">--</span><span class="temp-unit">°C</span></div>
+                        <div class="chip"><i class="fa-solid fa-droplet"></i> Humidity: <span id="humidity">--</span>%
+                        </div>
+                        <div class="chip"><i class="fa-solid fa-wind"></i> Wind: <span id="windSpeed">--</span> <span
+                                class="wind-unit">km/h</span></div>
+                    </div>
+                </div>
+
+                <div id="loadingSkeleton" class="skeleton-loader" style="display: none;">
+                    <div class="skeleton skeleton-text"></div>
+                    <div class="skeleton skeleton-text-short"></div>
+                    <div class="skeleton skeleton-box"></div>
+                </div>
+
+                <div id="apiError" class="error-card" style="display: none;">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <p id="errorMsg">Failed to load weather data.</p>
+                    <button id="retryBtn" class="btn-primary">Retry</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Generate Itinerary Info -->
+        <div class="itinerary-actions fade-in" id="itineraryActions" style="display: none;">
+            <div class="itinerary-header-row"
+                style="display: flex; justify-content: space-between; align-items: center; width: 100%; flex-wrap: wrap; gap: 1rem;">
+                <h2><i class="fa-solid fa-location-arrow"></i> Your Smart Itinerary</h2>
+                <div class="action-buttons" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    <button id="regenerateBtn" class="btn-secondary"><i class="fa-solid fa-shuffle"></i>
+                        Shuffle</button>
+                    <button id="exportPdfBtn" class="btn-primary" style="background-color: #ef4444;"><i
+                            class="fa-solid fa-file-pdf"></i> Export PDF</button>
+                    <button id="exportBtn" class="btn-primary"><i class="fa-solid fa-download"></i> Export txt</button>
+                </div>
+            </div>
+            <!-- Days Tab Container injected dynamically here later -->
+            <div id="dayTabsContainer" class="day-tabs" style="margin-top: 1rem;"></div>
+        </div>
+
+        <!-- Itinerary Container (Now wraps the Grid for PDF export) -->
+        <div id="pdfExportArea">
+            <div class="itinerary-title-export" id="itineraryPrintTitle" style="display:none;"></div>
+            <section class="itinerary-grid fade-in" id="itineraryGrid">
+                <!-- Morning -->
+                <article class="itinerary-card" id="morningCard">
+                    <div class="card-header morning-header">
+                        <div class="time-title">
+                            <h3><i class="fa-regular fa-sun"></i> Morning</h3>
+                            <span class="time-range">07:00 - 12:00</span>
+                        </div>
+                        <div class="weather-mini">
+                            <span id="morningTemp">--</span><span class="temp-unit">°C</span>
+                            <i id="morningIcon" class="fa-solid fa-cloud"></i>
+                        </div>
+                    </div>
+                    <ul class="activity-list" id="morningActivities">
+                        <li class="empty-state">Search a city to generate itinerary.</li>
+                    </ul>
+                </article>
+
+                <!-- Afternoon -->
+                <article class="itinerary-card" id="afternoonCard">
+                    <div class="card-header afternoon-header">
+                        <div class="time-title">
+                            <h3><i class="fa-solid fa-sun"></i> Afternoon</h3>
+                            <span class="time-range">12:00 - 17:00</span>
+                        </div>
+                        <div class="weather-mini">
+                            <span id="afternoonTemp">--</span><span class="temp-unit">°C</span>
+                            <i id="afternoonIcon" class="fa-solid fa-cloud"></i>
+                        </div>
+                    </div>
+                    <ul class="activity-list" id="afternoonActivities">
+                        <li class="empty-state">Search a city to generate itinerary.</li>
+                    </ul>
+                </article>
+
+                <!-- Evening -->
+                <article class="itinerary-card" id="eveningCard">
+                    <div class="card-header evening-header">
+                        <div class="time-title">
+                            <h3><i class="fa-solid fa-moon"></i> Evening</h3>
+                            <span class="time-range">17:00 - 21:00</span>
+                        </div>
+                        <div class="weather-mini">
+                            <span id="eveningTemp">--</span><span class="temp-unit">°C</span>
+                            <i id="eveningIcon" class="fa-solid fa-cloud"></i>
+                        </div>
+                    </div>
+                    <ul class="activity-list" id="eveningActivities">
+                        <li class="empty-state">Search a city to generate itinerary.</li>
+                    </ul>
+                </article>
+            </section>
+        </div><!-- End PDF export wrap -->
+
+        <!-- Map Section -->
+        <section class="map-section fade-in" id="mapSection" style="display: none;">
+            <div class="map-header">
+                <h2><i class="fa-solid fa-map"></i> Location Overview</h2>
+            </div>
+            <div id="map" class="map-container"></div>
+        </section>
+    </main>
+
+    <!-- History Drawer (Slide-in) -->
+    <aside class="history-drawer" id="historyDrawer">
+        <div class="drawer-header">
+            <h2><i class="fa-solid fa-clock-rotate-left"></i> Trip History</h2>
+            <button id="closeHistoryBtn" class="icon-btn" aria-label="Close History"><i
+                    class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="drawer-content">
+            <ul id="historyList" class="history-list">
+                <!-- History items injected here -->
+                <li class="empty-state">No saved trips yet.</li>
+            </ul>
+        </div>
+        <div class="drawer-footer">
+            <button id="clearHistoryBtn" class="btn-danger"><i class="fa-solid fa-trash"></i> Clear History</button>
+        </div>
+    </aside>
+
+    <!-- Popular Cities Sidebar (Left) -->
+    <aside class="popular-drawer" id="popularDrawer">
+        <div class="drawer-header">
+            <h2><i class="fa-solid fa-earth-americas"></i> Popular Cities</h2>
+            <button id="closePopularBtn" class="icon-btn" aria-label="Close Sidebar"><i
+                    class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="drawer-content">
+            <ul id="popularList" class="history-list">
+                <!-- Filled via JS -->
+            </ul>
+        </div>
+    </aside>
+
+    <div class="overlay" id="drawerOverlay"></div>
+
+    <!-- Date Picker Modal -->
+    <div class="modal-overlay" id="dateModalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Plan Your Trip to <span id="modalCityName"></span></h2>
+                <button id="closeModalBtn" class="icon-btn"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="modal-body">
+                <p>Select your travel dates (up to 14 days) to generate a deeply customized, weather-accurate daily
+                    itinerary.</p>
+                <input type="text" id="datePickerInput" placeholder="Select Date Range..." readonly="readonly">
+                <button id="generatePlanBtn" class="btn-primary w-100"
+                    style="margin-top: 1.5rem; justify-content: center;">Generate Smart Plan <i
+                        class="fa-solid fa-wand-magic-sparkles"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <p><strong>Smart Travel Planner</strong> | developed by Aryan Verma.</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script type="module" src="./js/app.js"></script>
+</body>
+
+</html>
